@@ -1,3 +1,14 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Global Dark Theme */
+body {
+  @apply bg-[#060B1F] text-white;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Smooth UI */
+* {
+  @apply transition-all duration-200;
+}
