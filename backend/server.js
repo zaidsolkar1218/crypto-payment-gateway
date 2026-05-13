@@ -22,7 +22,7 @@ connectDB();
 // Middleware
 app.use(
   cors({
-    origin: "https://crypto-payment-gateway-indol.vercel.app",
+    origin: "https://crypto-payment-gateway-indol.vercel.app","https://crypto-payment-gateway-gtbro9pgi-zaidsolkar1218s-projects.vercel.app","http://localhost:5173"
   })
 );
 

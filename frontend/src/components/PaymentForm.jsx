@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import axios from "axios";
 import { getContract } from "../utils/contract";
@@ -8,61 +8,98 @@ function PaymentForm({ setTransaction, refreshTransactions }) {
   const [message, setMessage] = useState("");
   const [merchantAddress, setMerchantAddress] = useState("");
 
+  // Load merchant / contract address on page load
+  useEffect(() => {
+    const loadContract = async () => {
+      try {
+        const contract = await getContract();
+
+        if (contract) {
+          setMerchantAddress(contract.target);
+        }
+      } catch (error) {
+        console.error("Failed to load merchant address:", error);
+      }
+    };
+
+    loadContract();
+  }, []);
+
   const handlePayment = async () => {
+    if (!amount || parseFloat(amount) <= 0) {
+      alert("Please enter a valid amount.");
+      return;
+    }
+
     try {
-      // Basic validation
-      if (!amount || parseFloat(amount) <= 0) {
-        alert("Please enter a valid amount.");
+      const contract = await getContract();
+
+      if (!contract) {
+        alert("Wallet not connected.");
         return;
       }
 
-      // Get smart contract
-      const contract = await getContract();
+      // Reset previous transaction state
+      setTransaction(null);
 
-      if (!contract) return;
-
-      // Fetch and display merchant / contract address
-      setMerchantAddress(contract.target);
-
-      // Send blockchain payment
+      // STEP 1 — Blockchain payment
       const tx = await contract.pay(message, {
         value: ethers.parseEther(amount),
       });
 
+      // STEP 2 — Wait for blockchain confirmation
       await tx.wait();
 
-      // Save payment to backend
-      await axios.post(
-        "https://crypto-payment-gateway-2xl2.onrender.com/api/payments",
-        {
-          sender: await contract.runner.getAddress(),
-          amount,
-          transactionHash: tx.hash,
-          message,
-          status: "Success",
-        }
-      );
-
-      // Update global SuccessCard
-      setTransaction({
+      // STEP 3 — Immediately show success
+      const successData = {
         success: true,
         hash: tx.hash,
-      });
+      };
 
-      // Refresh live transaction history
-      if (refreshTransactions) {
-        refreshTransactions();
-      }
+      setTransaction(successData);
 
-      // Reset form fields
+      // Preserve values before clearing
+      const currentAmount = amount;
+      const currentMessage = message;
+
+      // STEP 4 — Reset form fields
       setAmount("");
       setMessage("");
+
+      // STEP 5 — Backend logging (non-critical)
+      try {
+        const senderAddress = await contract.runner.getAddress();
+
+        await axios.post(
+          `${import.meta.env.VITE_BACKEND_URL}/api/payments`,
+          {
+            sender: senderAddress,
+            amount: currentAmount,
+            transactionHash: tx.hash,
+            message: currentMessage,
+            status: "Success",
+          }
+        );
+
+        // Refresh transactions table
+        if (refreshTransactions) {
+          refreshTransactions();
+        }
+
+      } catch (backendError) {
+        console.error(
+          "Backend save failed but blockchain payment succeeded:",
+          backendError
+        );
+      }
+
     } catch (error) {
       console.error("Payment failed:", error);
 
-      // Global failure state
+      // Only real payment rejection/revert should fail
       setTransaction({
         success: false,
+        hash: null,
       });
     }
   };
@@ -71,7 +108,7 @@ function PaymentForm({ setTransaction, refreshTransactions }) {
     <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl hover:shadow-purple-500/10 w-full text-white">
 
       {/* Heading */}
-      <h2 className="text-3xl font-bold mb-8 text-center">
+      <h2 className="text-4xl font-bold mb-8 text-center">
         Make a Payment
       </h2>
 
@@ -89,7 +126,7 @@ function PaymentForm({ setTransaction, refreshTransactions }) {
               : "Not Connected"
           }
           readOnly
-          className="w-full p-4 rounded-2xl bg-[#0B1739] border border-white/10 text-gray-400 outline-none"
+          className="w-full p-4 rounded-2xl bg-[#0B1739] border border-white/10 text-gray-300 outline-none"
         />
       </div>
 
